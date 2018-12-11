@@ -22,9 +22,6 @@ classdef EEG_images < handle
         srate           % [scalar] sample rate for EEG
     end
     properties (Dependent = true)
-        EpochAvg_check  % [numChans X numData] averaged epoch of checkerboard data
-        EpochAvg_rest   % [numChans X numData] averaged epoch of rest data
-        EpochAvg_misc   % [numChans X numData] averaged epoch of misc data
         EEG_fileDesc    % [str] Description used for file of images (no spaces)
         %                   in form: dir/[EEG_fileDesc]_[imageDesc].png
     end
@@ -52,13 +49,8 @@ classdef EEG_images < handle
             %Load Brain Vision format data into EEG
         end % empty
         
-        function EpochEEG_checkNRest(self)
-            %Epoch EEG data and average Epochs
-        end % empty
-        
         function EpochPeriod_Continous(self, epoch_start, epoch_end, ...
-                windowLength, period, ...
-                epoch_name)
+                windowLength, period, epoch_name)
             %Epoch EEG from start time to end time periodically
             %Input:
             %   epoch_start [scalar] - start time in seconds for first Epoch
@@ -80,6 +72,60 @@ classdef EEG_images < handle
             
             %split EEG into Epochs 
             self.Epochs(end).Epoch = pop_epoch( EEG_events, {'EpochTag'}, [0  ,windowLength]);
+            
+            %find mean of all epochs
+            self.Epochs(end).EpochsAvg = mean(self.Epochs(end).Epoch.data, 3);
+        end
+        
+        function Epoch_TriggerStart(self, TriggerStart, length, epoch_name)
+            %Epoch EEG from start time to end time periodically
+            %Input:
+            %   epoch_start [scalar] - start time in seconds for first Epoch
+            %   epoch_end   [scalar] - end time in seonds for last epoch
+            %   epoch_dur   [scalar] - duration in seconds of epoch
+            %   epoch_name  [str] - name of Epoch (if multiple Epochs are
+            %       stored
+            
+            %Create new Epoch
+            self.Epochs(end+1).name  = epoch_name;
+            
+            %split EEG into Epochs 
+            self.Epochs(end).Epoch = pop_epoch( self.EEG, {  TriggerStart  }, [0  length]);
+            
+            %find mean of all epochs
+            self.Epochs(end).EpochsAvg = mean(self.Epochs(end).Epoch.data, 3);
+        end
+        
+        function Epoch_TriggerSectionPeriodic(self, TriggerStart, sectionLength, ...
+                windowLength, period, epoch_name)
+            
+            %find start and end times in samples of each sections
+            sectionStart = [];
+            sectionEnd = [];
+            for eventIdx = 1:length(self.EEG.event)
+                EEG_event = self.EEG.event(eventIdx);
+                if strcmp(EEG_event.type, TriggerStart)                
+                    sectionStart(end + 1) = EEG_event.latency / self.srate;
+                end
+            end
+            
+            %Set add eeglab events to EEG to signify start of epochs
+            EEG_events = self.EEG;
+            for sectionIdx = 1:length(sectionStart)
+                EEG_events =  ...
+                    EEG_Epoch_Periodic(EEG_events, ...
+                            sectionStart(sectionIdx) * self.srate,...
+                            (sectionStart(sectionIdx) + sectionLength) * self.srate,  ...
+                            period * self.srate, ...
+                            'EpochTag');
+            end
+            
+            %Create new Epoch
+            self.Epochs(end+1).name  = epoch_name;
+            
+            %split EEG into Epochs 
+            self.Epochs(end).Epoch = ...
+                pop_epoch( EEG_events, {'EpochTag'}, [0  ,windowLength]);
             
             %find mean of all epochs
             self.Epochs(end).EpochsAvg = mean(self.Epochs(end).Epoch.data, 3);
@@ -140,7 +186,7 @@ classdef EEG_images < handle
             
         end
         
-        function plotffts_chans(self, chans, targetFreqs, limits, colors)
+        function fig = plotfft_whole_chans(self, chans, subtitle, limits, colors)
         %plots ffts for sets of data with target frequencies
         %****not finished needs figure saving, titles, default limits and
         %colors
@@ -153,7 +199,7 @@ classdef EEG_images < handle
             %get fft of all the chans
             for chanIdx = 1:length(chans)
                 [fft_data(chanIdx, :), f] = self.EEG_fft( ...
-                    self.Epochs.EpochsAvg(chans(chanIdx), :));
+                    self.EEG.data(chans(chanIdx), :));
             end
             
             %create figure with axis limits and chan names for title
@@ -162,18 +208,18 @@ classdef EEG_images < handle
             ylim(limits(3:4));
             %change header to show channels being plaoted
             header = self.desc;
-            title(header);
+            title({header, subtitle});
             hold;
             
             %Draw target frequencies
-            for targetIdx = 1:length(targetFreqs)
-                targetFreq = targetFreqs(targetIdx);
-                %check if freq is within draw range
-                if targetFreq >= limits(1) && targetFreq <= limits(2)
-                    %black line at target frequency spanning the y axis
-                    line([targetFreq, targetFreq], [limits(3), limits(4)], 'color', 'k');
-                end
-            end
+%             for targetIdx = 1:length(targetFreqs)
+%                 targetFreq = targetFreqs(targetIdx);
+%                 %check if freq is within draw range
+%                 if targetFreq >= limits(1) && targetFreq <= limits(2)
+%                     %black line at target frequency spanning the y axis
+%                     line([targetFreq, targetFreq], [limits(3), limits(4)], 'color', 'k');
+%                 end
+%             end
             
             %Draw fft data in order
             for chanIdx = 1:length(chans)
@@ -182,6 +228,7 @@ classdef EEG_images < handle
             
             
         end
+        
         function [fig,  avgPower]= avgPowerPlot_single(self, data, freqBand, excChan, makeFigFlag)
             %plot an average power plot of head using eeglab topoplot
             %Inputs: 
@@ -205,7 +252,8 @@ classdef EEG_images < handle
                 topoplot(avgPower(incChans), self.EEG.chanlocs(incChans));
             end
         end
-        function fig = plotFFTLoc(self, data, targetFreqs, limits, colors) % Needs debugging
+        
+        function fig = plotFFTLoc_duel(self, data, targetFreqs, limits, colors) % Needs debugging
             %plot fft at all chans using eeglab plottopo func using
             %Input:
             %   data    [1 x numDataSetsCell{numChans x numData}] - 
@@ -221,13 +269,13 @@ classdef EEG_images < handle
             
             %find ffts of data
             for dataIdx = 1:numDataSets
-                [EEG_ft(:,:,dataIdx), f] = self.EEG_fft(data{dataIdx});
+                [EEG_ft(:,:,dataIdx), f] = self.EEG_fft(data(:,:,dataIdx));
             end
             numfftData = size(EEG_ft, 2);            
             %set  x Limits of window if not specified
             if isempty(limits)
                 limits([1, 2]) = [0 60]; % 0-60Hz on x axis
-                limits([3, 4]) = [0,1*10^4]; %0-max power on y axis
+                limits([3, 4]) = [0,1*10^3]; %0-max power on y axis
             end
             %Find the index of f which is closest to the axit limits
             [~, freqLimitMaxIdx] = min(abs(f - limits(2)));
@@ -238,10 +286,11 @@ classdef EEG_images < handle
             
             %Set target frequencies if they are specified
             if ~isempty(targetFreqs)
-                for freqIdx = 1:length(targetFreqs)
+                for targetIdx = 1:length(targetFreqs)
                     %initailize all data to all zeroes
                     ftEmpty = ...
-                        zeros(size(EEG_ft(:,freqLimitMinIdx:freqLimitMaxIdx,:)));
+                        zeros(size(EEG_ft(:,freqLimitMinIdx:freqLimitMaxIdx,:), 1), ...
+                        size(EEG_ft(:,freqLimitMinIdx:freqLimitMaxIdx,:), 2));
                     topoData = cat(3, topoData, ftEmpty);
                     
                     %find value closeset to target freq on x axis
@@ -344,6 +393,7 @@ classdef EEG_images < handle
             %create new figure if none is specified
             if isempty(fig)
                 fig = figure;
+                hold;
             end
             
             %Use EEG description for title of graph
@@ -359,7 +409,7 @@ classdef EEG_images < handle
             
             xlabel('Time (s)')
             ylabel('Voltage (\muV)')
-            hold;
+            
             
             for chanIdx = 1:length(chans)
                 chan = chans(chanIdx);
@@ -367,8 +417,55 @@ classdef EEG_images < handle
             end
         
      
-        end %Needs work
-                
+        end
+        
+        function fig = plotfftEpochAvg_chans(self, chans, subtitle, epochNum, xlimit, ylimit, fig) 
+            %Plots the FFT for specified channels
+            %Inputs:
+            %   chans [1 x n] - channels to plot
+            %   subtitle [string] - subheading for graph title 
+            %   epochNum [int] - The epoch number identifier for epoch to avg
+            %       and plot
+            %   ylimit [1 x 2] - The lower and upper y limit of graph
+            %       Default - [0, 100]
+            %   fig [Mat fig obj] - figure for graph to be plotted on
+            %       Default - New figure is created
+            %Output:
+            %   fig - figure with channels ploted
+            
+            EpochMean = self.Epochs(epochNum).EpochsAvg;
+            [fftdata, f] = self.EEG_fft(EpochMean);
+            
+            
+            %create new figure if none is specified
+            if isempty(fig)
+                fig = figure;
+                hold;
+            end
+            
+            header = {self.desc, subtitle};
+            title(header);
+            
+            %set Y limit
+            if isempty(ylimit)
+                ylimit = [0 5000];
+            end
+            if isempty(xlimit)
+                xlimit = [1 70];
+            end
+            ylim(ylimit)
+            xlim(xlimit)
+            xlabel('freq (Hz)')
+            ylabel('Voltage (\muV)')
+            
+            
+            for chanIdx = 1:length(chans)
+                chan = chans(chanIdx);
+                plot(f, abs(fftdata(chan, :)), 'linewidth',0.2)
+            end
+            
+        end
+        
         function setsaveFigsFlag(self, outputDir, fileDesc)
             % set the save figs flag property to save figures generated to
             % output derectory
