@@ -24,6 +24,10 @@ classdef EEG_images < handle
     properties (Dependent = true)
         EEG_fileDesc    % [str] Description used for file of images (no spaces)
         %                   in form: dir/[EEG_fileDesc]_[imageDesc].png
+        ChansLeft      % [1 x numLeftChans] Channel number of Left Channels
+        ChansRight     % [1 x numRightChans] Channel number of Right Channels
+        ChansFront     % [1 x numFrontChans] Channel number of Front Channels
+        ChansBack      % [1 x numBackChans] Channel number of Back Channels
     end
     
     methods
@@ -34,7 +38,7 @@ classdef EEG_images < handle
             %   names
             self.desc = Desc;
         end
-        
+
         function loadEEG_set(self, input_path)
             %load set file for EEG
             
@@ -45,9 +49,42 @@ classdef EEG_images < handle
             
         end
         
-        function loadEEG_bv(self, input_path)
-            %Load Brain Vision format data into EEG
-        end % empty
+        function ChansLeft = get.ChansLeft(self)
+            leftIdx = 1;   
+            for chanIdx = 1:64
+                if(self.EEG.chanlocs(chanIdx).theta < 0)
+                    ChansLeft(leftIdx) = chanIdx;
+                    leftIdx = leftIdx + 1;
+                end
+            end
+        end
+        function ChansRight = get.ChansRight(self)
+            rightIdx = 1;   
+            for chanIdx = 1:64
+                if(self.EEG.chanlocs(chanIdx).theta > 0)
+                    ChansRight(rightIdx) = chanIdx;
+                    rightIdx = rightIdx + 1;
+                end
+            end
+        end
+        function ChansFront = get.ChansFront(self)
+            frontIdx = 1;   
+            for chanIdx = 1:64
+                if(abs(self.EEG.chanlocs(chanIdx).theta) <= 90)
+                    ChansFront(frontIdx) = chanIdx;
+                    frontIdx = frontIdx + 1;
+                end
+            end
+        end
+        function ChansBack = get.ChansBack(self)
+            backIdx = 1;   
+            for chanIdx = 1:64
+                if(abs(self.EEG.chanlocs(chanIdx).theta) > 90)
+                    ChansBack(backIdx) = chanIdx;
+                    backIdx = backIdx + 1;
+                end
+            end
+        end
         
         function EpochPeriod_Continous(self, epoch_start, epoch_end, ...
                 windowLength, period, epoch_name)
@@ -490,5 +527,6 @@ classdef EEG_images < handle
                 saveas(fig, filepng)
             end
         end
+        
     end
 end
