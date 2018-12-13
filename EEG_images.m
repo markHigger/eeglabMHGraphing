@@ -223,7 +223,7 @@ classdef EEG_images < handle
             
         end
         
-        function fig = plotfft_whole_chans(self, chans, subtitle, limits, colors)
+        function fig = plotfft_whole_chans(self, chans, subtitle, limits)
         %plots ffts for sets of data with target frequencies
         %****not finished needs figure saving, titles, default limits and
         %colors
@@ -266,7 +266,7 @@ classdef EEG_images < handle
             
         end
         
-        function [fig,  avgPower]= avgPowerPlot_single(self, data, freqBand, excChan, makeFigFlag)
+        function [fig,  avgPower] = avgPowerPlot_single(self, data, freqBand, excChan, makeFigFlag)
             %plot an average power plot of head using eeglab topoplot
             %Inputs: 
             %   data: [numChans x numData] time data to plot

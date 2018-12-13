@@ -17,7 +17,7 @@ files = []; %File data will be stored in a struct as follow
 %run in yyyymmdd format
 inputDir = '~/Documents/NKI/EEG_Data/Processed_Data/20181102/'; %example Dir
 
-%Example of specific file
+%Eexample of specific file
 inputName = 'EEG_20181102_0002_ET06_12_02_single_blink.set'; % example file name
 files(end + 1).path = {[inputDir, inputName]}; % set input path
 files(end).EpSize = 10; %Window allows for 2 periods
@@ -116,5 +116,29 @@ for fileIdx = 1:length(files)
     line([Fc Fc], [0, 7000], 'Color','k')
     FigObj.plotfftEpochAvg_chans([9:12], ...
         ' Chans 9:12 (Carrier)', 2, [0 20], [0 2000] , fig);
-   
+    
+    %plot fft of non-epoched data from 0 to 20 Hz, 
+    %NOTE:this will use the bandpassed EEG, to use non-bandpassed EEG
+    %reload set file
+    FigObj.plotfft_whole_chans([9], 'fft of whole channel', [0 20 0 100000]);
+    
+    %Plot all channel plot, and save figure
+    %This uses Epoch 1, with limits set to -10 to 10 and generate a new
+    %figure
+    fig = FigObj.plotEpochAvg_chans( [1:64], 'All Chans', 1,[-10 10], []);
+    %use painters renderer to save as vector pdf for better image quality
+    fig.Renderer = 'Painters'; 
+    figname = [outputDir,files(fileIdx).fileDesc, '_AllChans'];
+    %saveas(fig, figname,'pdf') %dont actually save because this is a test
+    
+    %Plot Carrier all channel plot, and save figure
+    %This uses Epoch 1, with limits set to -10 to 10 and generate a new
+    %figure
+    fig = FigObj.plotEpochAvg_chans( [1:64], 'All Chans Carrier', 2,[-10 10], []);
+    fig.Renderer = 'Painters';
+    figname = [outputDir,files(fileIdx).fileDesc, '_Carrier_AllChans'];
+    
+    %% Make topograph hilbert animation
+    %take hilbert transform
+    
 end
