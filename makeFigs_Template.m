@@ -32,7 +32,7 @@ files(end).fileDesc = ['0002_12_02_02_', num2str(files(end).EpSize), 's'];
 %set or make output directory for figures
 outputDir = '~/Documents/NKI/eeglabMHGraphing/figures/testFigs/';        
 if ~exist(outputDir, 'dir')
-    mkdir(outputDir)
+    %mkdir(outputDir)
 end
 %% Perform Operations on File
 %Loop through all files to find information
@@ -139,6 +139,79 @@ for fileIdx = 1:length(files)
     figname = [outputDir,files(fileIdx).fileDesc, '_Carrier_AllChans'];
     
     %% Make topograph hilbert animation
-    %take hilbert transform
+   
+    %take hilbert transform and set it to a new Epoch structure to get
+    %carrier envelope
+    %NOTE: this struct (FigObj.Epochs(3)) will only contain contain 
+    %       FigObj.Epochs(3).EpochsAvg, which is used for all the epoch
+    %       graphing, Epochs.Epoch and Epochs.name will be empty
+    for chanIdx = 1:64
+        FigObj.Epochs(3).EpochsAvg(chanIdx,:) = ...
+            abs(hilbert(FigObj.Epochs(2).EpochsAvg(chanIdx,:)));
+    end
+    
+    %plot Fp1 and Fp2, The envalope for these channels is fairly low, so
+    %the axes are reduced to [0,1], also note, the envelope is always
+    %positive
+    FigObj.plotEpochAvg_chans( [1:2], 'Envelope for Fp1 & Fp2', 3,[0 1], []);
+    
+    %Make animations with hilbert transforms
+    
+    %find length of envelope in points
+    envelopeLength = length(FigObj.Epochs(3).EpochsAvg);
+    numBins = 20; % make a numBins image gif (this can change)
+    binLength = floor(envelopeLength / numBins);
+    
+    %make figures for a GIF of Epoch, Carrier Epoch and topo graph 
+    GifDir = [outputDir, files(fileIdx).fileDesc, '_GIFImages/'];
+    if ~exist(GifDir, 'dir')
+        %mkdir(GifDir)
+    end
+    for sampIdx = 1:binLength:envelopeLength
+        
+        fig = figure;
+        
+        %average a bin 
+        %Find the Mean value of the envelope within the bin at each channel
+        envBin = FigObj.Epochs(3).EpochsAvg(:,[sampIdx:(sampIdx + binLength -1)]);
+        avgEnvelope =  mean(envBin, 2);
+        
+        %Draw topoGraph excluding chan 32 (far location obscures topoplot)
+        subplot(2,2,[2,4]);  % Draw on full right side of plot
+        topoplot(avgEnvelope([1:31, 33:64], :), FigObj.EEG.chanlocs([1:31, 33:64]))
+        caxis([-1.3, 1.3]); % fairly arbitrary limit
+        title({FigObj.desc, 'Carrier Amplitude'});
+        
+        
+        %draw all channels full epoch
+        subfig = subplot(2,2,1); %Draw on top left
+        hold
+        FigObj.plotEpochAvg_chans( [1:64],'All Channels: Full Epoch', ...
+            1, [-20 20], subfig);
+        
+        %set referece line to the time in seconds of the plot
+        refTime = (sampIdx) / FigObj.srate;
+        lineMax = 60; % this can be any number higher than the y lim of graph
+        lineMin = -60;
+        refLine = line([refTime, refTime], [lineMin, lineMax]);
+        refLine.Color = 'k';
+        refLine.LineWidth = 2;
+        
+        %Draw bandpassed line
+        subfig = subplot(2,2,3); %Draw on top right
+        hold
+        FigObj.plotEpochAvg_chans( [1:64],'All Channels: Carrier Freq', ...
+            2, [-20 20], subfig);
+        
+        refLine = line([refTime, refTime], [lineMin, lineMax]);
+        refLine.Color = 'k';
+        refLine.LineWidth = 2;
+        
+        %Save figure
+        figname = [GifDir, '_carrier_topo_', ...
+            num2str(floor(sampIdx/FigObj.srate)), 's'];
+        saveas(fig, figname,'png')
+    end
+    
     
 end
